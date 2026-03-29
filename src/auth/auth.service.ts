@@ -4,6 +4,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { JwtPayload } from './interfaces/jwt.payload.interface';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
@@ -11,6 +13,7 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly jwtService: JwtService,
   ) { }
 
   async create(createUserDto: CreateUserDto) {
@@ -28,7 +31,7 @@ export class AuthService {
       //npm install @nestjs/passport passport
       //npm install @nestjs/jwt passport-jwt
       //npm install -D @types/passport-jwt
-      return user;
+      return { ...user, token: this.getJwtToken({ id: user.id }) };
 
     } catch (error) {
       this.handleDBExceptions(error);
@@ -40,7 +43,7 @@ export class AuthService {
       const { email, password } = loginUserDto;
       const user = await this.userRepository.findOne({
         where: { email },
-        select: { email: true, password: true }
+        select: { email: true, password: true, id: true }
       });
       if (!user) {
         throw new UnauthorizedException('Invalid credentials email');
@@ -50,12 +53,24 @@ export class AuthService {
         throw new UnauthorizedException('Invalid credentials password');
       }
 
-      return user;
-      //TODO: Generar JWT
+
+      return { ...user, token: this.getJwtToken({ id: user.id }) };
 
     } catch (error) {
       this.handleDBExceptions(error);
     }
+  }
+
+  async checkAuthStatus(user: User) {
+    return {
+      user,
+      token: this.getJwtToken({ id: user.id })
+    };
+  }
+
+  private getJwtToken(payload: JwtPayload) {
+    const token = this.jwtService.sign(payload);
+    return token;
   }
 
 
